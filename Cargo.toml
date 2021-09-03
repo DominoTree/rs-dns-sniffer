@@ -5,8 +5,8 @@ authors = ["Nick Price <nick@spun.io>"]
 description = "High-performance multithreaded DNS sniffer in ~50 lines as a simple demonstration of the af_packet crate working with existing crates"
 
 [dependencies]
-af_packet = "0.2"
-dns-parser = "0.7"
-nom = "3.2"
-num_cpus = "1.8"
-pktparse = "0.2"
+af_packet = "0.3.1"
+dns-parser = "0.8.0"
+nom = "7.0.0"
+num_cpus = "1.13.0"
+pktparse = "0.7.0"

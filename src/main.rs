@@ -8,33 +8,32 @@ use std::env;
 use std::thread;
 
 use dns_parser::Packet;
-use nom::IResult;
-use pktparse::{ethernet, ipv4, udp};
+use pktparse::{ethernet, ipv4, ip, udp};
 
 fn main() {
     let args: Vec<String> = env::args().collect();
-    let mut settings = af_packet::RingSettings::default();
+    let mut settings = af_packet::rx::RingSettings::default();
     let mut fds = Vec::<i32>::new();
 
     //disable rx hash stuff because DNS shouldn't need it (At least over UDP)
-    settings.fanout_method = af_packet::PACKET_FANOUT_LB;
+    settings.fanout_method = af_packet::rx::PACKET_FANOUT_LB;
     settings.ring_settings.tp_feature_req_word = 0;
     settings.if_name = args[1].clone();
 
     for _ in 0..num_cpus::get() {
         let ring_settings = settings.clone();
-        let mut ring = af_packet::Ring::new(ring_settings).unwrap();
-        fds.push(ring.fd);
+        let mut ring = af_packet::rx::Ring::new(ring_settings).unwrap();
+        fds.push(ring.socket.fd);
         thread::spawn(move || {
             loop {
                 let mut block = ring.get_block();
                 for packet in block.get_raw_packets() {
                     //think ethernet header is 82b offset
-                    if let IResult::Done(remainder, frame) = ethernet::parse_ethernet_frame(&packet.data[82..]) {
+                    if let Ok((remainder, frame)) = ethernet::parse_ethernet_frame(&packet.data[82..]) {
                         if frame.ethertype == ethernet::EtherType::IPv4 {
-                            if let IResult::Done(remainder, v4) = ipv4::parse_ipv4_header(&remainder) {
-                                if v4.protocol == ipv4::IPv4Protocol::UDP {
-                                    if let IResult::Done(remainder, udp) = udp::parse_udp_header(&remainder) {
+                            if let Ok((remainder, v4)) = ipv4::parse_ipv4_header(&remainder) {
+                                if v4.protocol == ip::IPProtocol::UDP {
+                                    if let Ok((remainder, udp)) = udp::parse_udp_header(&remainder) {
                                         if udp.source_port == 53 || udp.dest_port == 53 {
                                             let dns = Packet::parse(&remainder);
                                             println!("{:?}", dns);
@@ -56,7 +55,7 @@ fn main() {
     loop {
         let mut stats: (u64, u64) = (0, 0);
         for fd in &fds {
-            let ring_stats = af_packet::get_rx_statistics(*fd).unwrap();
+            let ring_stats = af_packet::rx::get_rx_statistics(*fd).unwrap();
             stats.0 += ring_stats.tp_drops as u64;
             stats.1 += ring_stats.tp_packets as u64;
         }
